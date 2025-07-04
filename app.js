@@ -108,6 +108,12 @@ app.ws('/connection', (ws) => {
     const streamService = new StreamService(ws);
     const transcriptionService = new TranscriptionService();
     const ttsService = new TextToSpeechService({});
+
+    // Handle STT errors
+    transcriptionService.on('error', (error) => {
+      logTransfer(`STT service error: ${error.message}`, 'error');
+      // Don't close the call on STT errors, just log them
+    });
   
     let marks = [];
     let interactionCount = 0;
@@ -115,21 +121,24 @@ app.ws('/connection', (ws) => {
     let waitingForAnswer = false;
     let userInputBuffer = '';
     let bufferTimeout = null;
-    const BUFFER_PAUSE_MS = 1200; // 1.2 seconds pause = end of answer
+    const BUFFER_PAUSE_MS = 800; // Reduced to 0.8 seconds for faster response
 
-    // Helper for smarter deduplication
+    // Helper for smarter deduplication - less aggressive
     function isSimilarInput(newInput, lastInput) {
       if (!newInput || !lastInput) return false;
       const a = newInput.trim().toLowerCase();
       const b = lastInput.trim().toLowerCase();
       if (a === b) return true;
-      if (a.length < 4 || b.length < 4) return false;
+      if (a.length < 3 || b.length < 3) return false;
+      // Only check for exact substring matches, not partial similarity
       if (a.includes(b) || b.includes(a)) return true;
+      // Allow more differences - only reject if very similar
       let mismatches = 0;
       for (let i = 0; i < Math.min(a.length, b.length); i++) {
         if (a[i] !== b[i]) mismatches++;
       }
-      return mismatches <= 2;
+      // Only reject if very similar (allow more differences)
+      return mismatches <= 1 && Math.abs(a.length - b.length) <= 2;
     }
   
     // Enhanced logging function
@@ -396,10 +405,20 @@ app.ws('/connection', (ws) => {
         clearTimeout(transferTimeout);
         transferTimeout = null;
       }
+      if (bufferTimeout) {
+        clearTimeout(bufferTimeout);
+        bufferTimeout = null;
+      }
       // If we have a pending transfer but haven't completed it, force it
       if (pendingTransfer && callSid && !transferMessagePlayed) {
         logTransfer(`WebSocket closed with pending transfer - forcing transfer`, 'warn');
         transferFlags[callSid] = true;
+      }
+      // Properly close STT connection
+      try {
+        transcriptionService.close();
+      } catch (error) {
+        logTransfer(`Error closing STT connection: ${error.message}`, 'error');
       }
       // Remove all listeners to prevent duplicate transfer triggers
       gptService.removeAllListeners();
