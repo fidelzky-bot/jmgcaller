@@ -111,6 +111,7 @@ app.ws('/connection', (ws) => {
   
     let marks = [];
     let interactionCount = 0;
+    let lastUserInput = '';
     
     // Enhanced logging function
     const logTransfer = (message, level = 'info') => {
@@ -194,13 +195,12 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('utterance', async (text) => {
       logTransfer(`STT Utterance: "${text}"`, 'info');
-      if (text && text.length > 1) {
-        // Fallback: If no transcription event, treat utterance as transcription
+      if (text && text.length > 1 && text !== lastUserInput) {
         logTransfer(`STT (fallback) -> GPT: ${text}`, 'info');
         gptService.completion(text, interactionCount);
         interactionCount += 1;
+        lastUserInput = text;
       }
-      // This is a bit of a hack to filter out empty utterances
       if(marks.length > 0 && text?.length > 1) {
         logTransfer(`Interruption detected - clearing stream`, 'warn');
         ws.send(
@@ -214,10 +214,12 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       logTransfer(`STT Transcription: "${text}"`, 'info');
-      if (!text) { return; }
-      logTransfer(`STT -> GPT: ${text}`, 'info');
-      gptService.completion(text, interactionCount);
-      interactionCount += 1;
+      if (text && text.length > 1 && text !== lastUserInput) {
+        logTransfer(`STT -> GPT: ${text}`, 'info');
+        gptService.completion(text, interactionCount);
+        interactionCount += 1;
+        lastUserInput = text;
+      }
     });
     
     gptService.on('gptreply', async (gptReply, icount) => {
