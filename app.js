@@ -17,6 +17,8 @@ ExpressWs(app);
 
 const PORT = process.env.PORT || 3000;
 
+const transferFlags = {};
+
 // Health check endpoint for OnRender
 app.get('/', (req, res) => {
   res.json({ 
@@ -28,10 +30,20 @@ app.get('/', (req, res) => {
 
 app.post('/incoming', (req, res) => {
   try {
+    // Get callSid from Twilio webhook (from POST body or query)
+    const callSid = req.body?.CallSid || req.query?.CallSid;
+    if (callSid && transferFlags[callSid]) {
+      // Transfer requested for this call
+      const response = new VoiceResponse();
+      response.dial('+16156175000');
+      delete transferFlags[callSid];
+      res.type('text/xml');
+      res.end(response.toString());
+      return;
+    }
     const response = new VoiceResponse();
     const connect = response.connect();
     connect.stream({ url: `wss://${process.env.SERVER}/connection` });
-  
     res.type('text/xml');
     res.end(response.toString());
   } catch (err) {
@@ -101,6 +113,12 @@ app.ws('/connection', (ws) => {
     });
     
     gptService.on('gptreply', async (gptReply, icount) => {
+      // If the AI says to transfer, set the flag and close the WebSocket
+      if (gptReply && gptReply.partialResponse && gptReply.partialResponse.toLowerCase().includes('transfer you to our main line')) {
+        if (callSid) transferFlags[callSid] = true;
+        ws.close();
+        return;
+      }
       console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green );
       ttsService.generate(gptReply, icount);
     });
