@@ -112,7 +112,11 @@ app.ws('/connection', (ws) => {
     let marks = [];
     let interactionCount = 0;
     let lastUserInput = '';
-    
+    let waitingForAnswer = false;
+    let userInputBuffer = '';
+    let bufferTimeout = null;
+    const BUFFER_PAUSE_MS = 1200; // 1.2 seconds pause = end of answer
+
     // Helper for smarter deduplication
     function isSimilarInput(newInput, lastInput) {
       if (!newInput || !lastInput) return false;
@@ -120,9 +124,7 @@ app.ws('/connection', (ws) => {
       const b = lastInput.trim().toLowerCase();
       if (a === b) return true;
       if (a.length < 4 || b.length < 4) return false;
-      // Substring check
       if (a.includes(b) || b.includes(a)) return true;
-      // Levenshtein distance (simple version)
       let mismatches = 0;
       for (let i = 0; i < Math.min(a.length, b.length); i++) {
         if (a[i] !== b[i]) mismatches++;
@@ -210,13 +212,28 @@ app.ws('/connection', (ws) => {
       }
     });
   
-    transcriptionService.on('utterance', async (text) => {
-      logTransfer(`STT Utterance: "${text}"`, 'info');
-      if (text && text.length > 1 && !isSimilarInput(text, lastUserInput)) {
-        logTransfer(`STT (fallback) -> GPT: ${text}`, 'info');
+    // Helper to flush buffer to GPT
+    function flushUserInputBuffer() {
+      const text = userInputBuffer.trim();
+      if (text.length > 1 && !isSimilarInput(text, lastUserInput)) {
+        logTransfer(`Turn-based: Sending buffered answer to GPT: ${text}`, 'info');
         gptService.completion(text, interactionCount);
         interactionCount += 1;
         lastUserInput = text;
+        userInputBuffer = '';
+        waitingForAnswer = false;
+      }
+    }
+
+    transcriptionService.on('utterance', async (text) => {
+      logTransfer(`STT Utterance: "${text}"`, 'info');
+      if (!waitingForAnswer) return;
+      if (text && text.length > 1) {
+        userInputBuffer = text;
+        if (bufferTimeout) clearTimeout(bufferTimeout);
+        bufferTimeout = setTimeout(() => {
+          flushUserInputBuffer();
+        }, BUFFER_PAUSE_MS);
       }
       if(marks.length > 0 && text?.length > 1) {
         logTransfer(`Interruption detected - clearing stream`, 'warn');
@@ -231,44 +248,30 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       logTransfer(`STT Transcription: "${text}"`, 'info');
-      if (text && text.length > 1 && !isSimilarInput(text, lastUserInput)) {
-        logTransfer(`STT -> GPT: ${text}`, 'info');
-        gptService.completion(text, interactionCount);
-        interactionCount += 1;
-        lastUserInput = text;
+      if (!waitingForAnswer) return;
+      if (text && text.length > 1) {
+        userInputBuffer = text;
+        if (bufferTimeout) clearTimeout(bufferTimeout);
+        bufferTimeout = setTimeout(() => {
+          flushUserInputBuffer();
+        }, BUFFER_PAUSE_MS);
       }
     });
     
+    // When GPT emits a new question, set waitingForAnswer = true and clear buffer
     gptService.on('gptreply', async (gptReply, icount) => {
       if (pendingTransfer) {
         logTransfer(`Ignoring GPT reply - transfer already pending`, 'info');
-        return; // Ignore further replies after transfer is triggered
-      }
-      
-      if (gptReply && gptReply.partialResponse && gptReply.partialResponse.toLowerCase().includes('transfer you to our main line')) {
-        logTransfer(`Transfer triggered by GPT: ${gptReply.partialResponse}`, 'success');
-        pendingTransfer = true;
-        transferMarkLabel = 'transfer-message-' + Date.now();
-        transferMessageSent = true;
-        
-        // Set a timeout in case the TTS fails or mark is never received
-        transferTimeout = setTimeout(() => {
-          if (pendingTransfer && callSid) {
-            logTransfer(`Transfer timeout - forcing transfer without mark`, 'warn');
-            transferFlags[callSid] = true;
-            logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
-            ws.close(1000, 'Transfer complete');
-            pendingTransfer = false;
-            transferMarkLabel = null;
-          }
-        }, 15000); // 15 second timeout for transfer message
-        
-        ttsService.generate({ ...gptReply, markLabel: transferMarkLabel }, icount);
         return;
       }
-      
       logTransfer(`GPT -> TTS: ${gptReply.partialResponse}`, 'info');
       ttsService.generate(gptReply, icount);
+      // Only set waitingForAnswer if this is a question (ends with ?)
+      if (gptReply.partialResponse && gptReply.partialResponse.trim().endsWith('?')) {
+        waitingForAnswer = true;
+        userInputBuffer = '';
+        if (bufferTimeout) clearTimeout(bufferTimeout);
+      }
     });
   
     ttsService.on('speech', (responseIndex, audio, label, icount) => {
