@@ -173,7 +173,8 @@ app.ws('/connection', (ws) => {
                 delete transferTimeouts[callSid];
               }, 10000); // 10 second timeout
               
-              ws.close();
+              logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
+              ws.close(1000, 'Transfer complete');
               pendingTransfer = false;
               transferMarkLabel = null;
             }
@@ -230,7 +231,8 @@ app.ws('/connection', (ws) => {
           if (pendingTransfer && callSid) {
             logTransfer(`Transfer timeout - forcing transfer without mark`, 'warn');
             transferFlags[callSid] = true;
-            ws.close();
+            logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
+            ws.close(1000, 'Transfer complete');
             pendingTransfer = false;
             transferMarkLabel = null;
           }
@@ -257,7 +259,8 @@ app.ws('/connection', (ws) => {
           // Force the transfer since we can't play the message
           if (callSid) {
             transferFlags[callSid] = true;
-            ws.close();
+            logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
+            ws.close(1000, 'Transfer complete');
             pendingTransfer = false;
             transferMarkLabel = null;
           }
@@ -276,7 +279,8 @@ app.ws('/connection', (ws) => {
       if (pendingTransfer && callSid) {
         logTransfer(`TTS failed during transfer - forcing transfer`, 'warn');
         transferFlags[callSid] = true;
-        ws.close();
+        logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
+        ws.close(1000, 'Transfer complete');
         pendingTransfer = false;
         transferMarkLabel = null;
       }
@@ -290,7 +294,8 @@ app.ws('/connection', (ws) => {
       if (pendingTransfer && transferMarkLabel && markLabel === transferMarkLabel && callSid) {
         logTransfer(`Legacy transfer logic triggered`, 'info');
         transferFlags[callSid] = true;
-        ws.close();
+        logTransfer('Closing WebSocket with code 1000: Transfer complete', 'info');
+        ws.close(1000, 'Transfer complete');
         pendingTransfer = false;
         transferMarkLabel = null;
       }
