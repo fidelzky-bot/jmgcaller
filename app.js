@@ -15,6 +15,10 @@ const VoiceResponse = require('twilio').twiml.VoiceResponse;
 const app = express();
 ExpressWs(app);
 
+// Add body parsing middleware for Twilio webhooks
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 const PORT = process.env.PORT || 3000;
 
 const transferFlags = {};
@@ -46,6 +50,9 @@ app.get('/status', (req, res) => {
 
 app.post('/incoming', (req, res) => {
   try {
+    // Log incoming webhook for debugging
+    console.log('Incoming webhook body:', req.body);
+    console.log('Incoming webhook query:', req.query);
     // Get callSid from Twilio webhook (from POST body or query)
     const callSid = req.body?.CallSid || req.query?.CallSid;
     console.log(`📞 Incoming webhook for callSid: ${callSid}`.cyan);
