@@ -95,9 +95,17 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       if (!text) { return; }
+      const startTime = Date.now();
       console.log(`Interaction ${interactionCount} – STT -> GPT: ${text}`.yellow);
+      // Immediate response - no buffering delay
       gptService.completion(text, interactionCount);
       interactionCount += 1;
+      
+      // Monitor response time
+      setTimeout(() => {
+        const responseTime = Date.now() - startTime;
+        console.log(`⏱️ Response time: ${responseTime}ms`.cyan);
+      }, 100);
     });
     
     gptService.on('gptreply', async (gptReply, icount) => {

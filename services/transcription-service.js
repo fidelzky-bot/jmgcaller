@@ -14,8 +14,8 @@ class TranscriptionService extends EventEmitter {
       model: 'nova-2',
       punctuate: true,
       interim_results: true,
-      endpointing: 200,
-      utterance_end_ms: 1000
+      endpointing: 100, // Faster endpointing for SONA-like speed
+      utterance_end_ms: 500 // Shorter utterance end for faster response
     });
 
     this.finalResult = '';

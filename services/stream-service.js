@@ -33,6 +33,7 @@ class StreamService extends EventEmitter {
   }
 
   sendAudio (audio) {
+    // Immediate audio streaming for SONA-like speed
     this.ws.send(
       JSON.stringify({
         streamSid: this.streamSid,

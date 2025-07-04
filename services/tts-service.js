@@ -16,8 +16,9 @@ class TextToSpeechService extends EventEmitter {
     if (!partialResponse) { return; }
 
     try {
+      // Use faster TTS settings for SONA-like speed
       const response = await fetch(
-        `https://api.deepgram.com/v1/speak?model=${process.env.VOICE_MODEL}&encoding=mulaw&sample_rate=8000&container=none`,
+        `https://api.deepgram.com/v1/speak?model=${process.env.VOICE_MODEL}&encoding=mulaw&sample_rate=8000&container=none&speed=1.1`,
         {
           method: 'POST',
           headers: {
@@ -26,6 +27,8 @@ class TextToSpeechService extends EventEmitter {
           },
           body: JSON.stringify({
             text: partialResponse,
+            // Optimize for speed
+            voice: process.env.VOICE_MODEL || 'nova-2',
           }),
         }
       );

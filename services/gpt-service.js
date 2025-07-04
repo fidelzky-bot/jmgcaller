@@ -57,6 +57,8 @@ class GptService extends EventEmitter {
       messages: this.userContext,
       tools: tools,
       stream: true,
+      temperature: 0.7, // Slightly higher for faster responses
+      max_tokens: 150, // Limit response length for speed
     });
 
     let completeResponse = '';
