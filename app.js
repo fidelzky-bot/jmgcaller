@@ -252,9 +252,7 @@ app.ws('/connection', (ws) => {
       if (text && text.length > 1) {
         userInputBuffer = text;
         if (bufferTimeout) clearTimeout(bufferTimeout);
-        bufferTimeout = setTimeout(() => {
-          flushUserInputBuffer();
-        }, BUFFER_PAUSE_MS);
+        flushUserInputBuffer(); // Immediately flush on transcription event
       }
     });
     
