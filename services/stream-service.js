@@ -14,25 +14,25 @@ class StreamService extends EventEmitter {
     this.streamSid = streamSid;
   }
 
-  buffer (index, audio) {
+  buffer (index, audio, markLabel = null) {
     // Escape hatch for intro message, which doesn't have an index
     if(index === null) {
-      this.sendAudio(audio);
+      this.sendAudio(audio, markLabel);
     } else if(index === this.expectedAudioIndex) {
-      this.sendAudio(audio);
+      this.sendAudio(audio, markLabel);
       this.expectedAudioIndex++;
 
       while(Object.prototype.hasOwnProperty.call(this.audioBuffer, this.expectedAudioIndex)) {
         const bufferedAudio = this.audioBuffer[this.expectedAudioIndex];
-        this.sendAudio(bufferedAudio);
+        this.sendAudio(bufferedAudio.audio, bufferedAudio.markLabel);
         this.expectedAudioIndex++;
       }
     } else {
-      this.audioBuffer[index] = audio;
+      this.audioBuffer[index] = { audio, markLabel };
     }
   }
 
-  sendAudio (audio) {
+  sendAudio (audio, markLabel = null) {
     this.ws.send(
       JSON.stringify({
         streamSid: this.streamSid,
@@ -43,17 +43,17 @@ class StreamService extends EventEmitter {
       })
     );
     // When the media completes you will receive a `mark` message with the label
-    const markLabel = uuid.v4();
+    const label = markLabel || uuid.v4();
     this.ws.send(
       JSON.stringify({
         streamSid: this.streamSid,
         event: 'mark',
         mark: {
-          name: markLabel
+          name: label
         }
       })
     );
-    this.emit('audiosent', markLabel);
+    this.emit('audiosent', label);
   }
 }
 

@@ -58,6 +58,7 @@ app.ws('/connection', (ws) => {
     let streamSid;
     let callSid;
     let pendingTransfer = false;
+    let transferMarkLabel = null;
 
     const gptService = new GptService();
     const streamService = new StreamService(ws);
@@ -117,6 +118,9 @@ app.ws('/connection', (ws) => {
       if (pendingTransfer) return; // Ignore further replies after transfer is triggered
       if (gptReply && gptReply.partialResponse && gptReply.partialResponse.toLowerCase().includes('transfer you to our main line')) {
         pendingTransfer = true;
+        transferMarkLabel = 'transfer-message-' + Date.now();
+        ttsService.generate({ ...gptReply, markLabel: transferMarkLabel }, icount);
+        return;
       }
       console.log(`Interaction ${icount}: GPT -> TTS: ${gptReply.partialResponse}`.green );
       ttsService.generate(gptReply, icount);
@@ -124,20 +128,18 @@ app.ws('/connection', (ws) => {
   
     ttsService.on('speech', (responseIndex, audio, label, icount) => {
       console.log(`Interaction ${icount}: TTS -> TWILIO: ${label}`.blue);
-  
-      streamService.buffer(responseIndex, audio);
-      // If a transfer is pending, set the flag and close the WebSocket after TTS is sent
-      if (pendingTransfer && callSid) {
-        transferFlags[callSid] = true;
-        setTimeout(() => {
-          ws.close();
-          pendingTransfer = false;
-        }, 1000); // 1 second delay to ensure message is played
-      }
+      streamService.buffer(responseIndex, audio, label);
     });
   
     streamService.on('audiosent', (markLabel) => {
       marks.push(markLabel);
+      // If a transfer is pending and this is the transfer message mark, close the WebSocket and set the flag
+      if (pendingTransfer && transferMarkLabel && markLabel === transferMarkLabel && callSid) {
+        transferFlags[callSid] = true;
+        ws.close();
+        pendingTransfer = false;
+        transferMarkLabel = null;
+      }
     });
   } catch (err) {
     console.log(err);
