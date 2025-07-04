@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: illinois-hammer-ai-intake
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: node app.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    healthCheckPath: /
+    autoDeploy: true 
