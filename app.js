@@ -166,6 +166,10 @@ app.ws('/connection', (ws) => {
         // Set RECORDING_ENABLED='true' in .env to record calls
         recordingService(ttsService, callSid).then(() => {
           logTransfer(`Starting AI intake process`, 'info');
+          // Set waitingForAnswer to true for the initial question
+          waitingForAnswer = true;
+          userInputBuffer = '';
+          logTransfer(`Initial question - waitingForAnswer set to true`, 'info');
           ttsService.generate({partialResponseIndex: null, partialResponse: 'Thank you for calling The Illinois Hammer. Are you calling about a new case?'}, 0);
         });
       } else if (msg.event === 'media') {
@@ -215,26 +219,56 @@ app.ws('/connection', (ws) => {
     // Helper to flush buffer to GPT
     function flushUserInputBuffer() {
       const text = userInputBuffer.trim();
+      logTransfer(`flushUserInputBuffer called with text: "${text}"`, 'info');
+      logTransfer(`Text length: ${text.length}, lastUserInput: "${lastUserInput}", isSimilar: ${isSimilarInput(text, lastUserInput)}`, 'info');
+      
       if (text.length > 1 && !isSimilarInput(text, lastUserInput)) {
-        logTransfer(`Turn-based: Sending buffered answer to GPT: ${text}`, 'info');
-        gptService.completion(text, interactionCount);
-        interactionCount += 1;
-        lastUserInput = text;
-        userInputBuffer = '';
-        waitingForAnswer = false;
+        logTransfer(`Turn-based: Sending buffered answer to GPT: "${text}"`, 'info');
+        try {
+          gptService.completion(text, interactionCount);
+          logTransfer(`GPT completion called successfully for interaction ${interactionCount}`, 'success');
+          interactionCount += 1;
+          lastUserInput = text;
+          userInputBuffer = '';
+          waitingForAnswer = false;
+          logTransfer(`State updated - waitingForAnswer: false, interactionCount: ${interactionCount}`, 'info');
+        } catch (error) {
+          logTransfer(`Error calling GPT completion: ${error.message}`, 'error');
+        }
+      } else {
+        if (text.length <= 1) {
+          logTransfer(`Text too short (${text.length} chars) - not sending to GPT`, 'warn');
+        } else {
+          logTransfer(`Text too similar to last input - not sending to GPT`, 'warn');
+        }
       }
     }
 
     transcriptionService.on('utterance', async (text) => {
       logTransfer(`STT Utterance: "${text}"`, 'info');
-      if (!waitingForAnswer) return;
+      logTransfer(`waitingForAnswer: ${waitingForAnswer}, text length: ${text?.length}`, 'info');
+      
+      if (!waitingForAnswer) {
+        logTransfer(`Ignoring utterance - not waiting for answer`, 'warn');
+        return;
+      }
+      
       if (text && text.length > 1) {
+        logTransfer(`Adding to buffer: "${text}"`, 'info');
         userInputBuffer = text;
-        if (bufferTimeout) clearTimeout(bufferTimeout);
+        if (bufferTimeout) {
+          clearTimeout(bufferTimeout);
+          logTransfer(`Cleared existing buffer timeout`, 'info');
+        }
         bufferTimeout = setTimeout(() => {
+          logTransfer(`Buffer timeout triggered - flushing buffer`, 'info');
           flushUserInputBuffer();
         }, BUFFER_PAUSE_MS);
+        logTransfer(`Set buffer timeout for ${BUFFER_PAUSE_MS}ms`, 'info');
+      } else {
+        logTransfer(`Utterance too short (${text?.length} chars) - ignoring`, 'warn');
       }
+      
       if(marks.length > 0 && text?.length > 1) {
         logTransfer(`Interruption detected - clearing stream`, 'warn');
         ws.send(
@@ -248,27 +282,54 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       logTransfer(`STT Transcription: "${text}"`, 'info');
-      if (!waitingForAnswer) return;
+      logTransfer(`waitingForAnswer: ${waitingForAnswer}, text length: ${text?.length}`, 'info');
+      
+      if (!waitingForAnswer) {
+        logTransfer(`Ignoring transcription - not waiting for answer`, 'warn');
+        return;
+      }
+      
       if (text && text.length > 1) {
+        logTransfer(`Adding to buffer and immediately flushing: "${text}"`, 'info');
         userInputBuffer = text;
-        if (bufferTimeout) clearTimeout(bufferTimeout);
+        if (bufferTimeout) {
+          clearTimeout(bufferTimeout);
+          logTransfer(`Cleared buffer timeout due to transcription event`, 'info');
+        }
         flushUserInputBuffer(); // Immediately flush on transcription event
+      } else {
+        logTransfer(`Transcription too short (${text?.length} chars) - ignoring`, 'warn');
       }
     });
     
     // When GPT emits a new question, set waitingForAnswer = true and clear buffer
     gptService.on('gptreply', async (gptReply, icount) => {
+      logTransfer(`GPT reply received for interaction ${icount}: "${gptReply.partialResponse}"`, 'info');
+      
       if (pendingTransfer) {
         logTransfer(`Ignoring GPT reply - transfer already pending`, 'info');
         return;
       }
+      
       logTransfer(`GPT -> TTS: ${gptReply.partialResponse}`, 'info');
-      ttsService.generate(gptReply, icount);
+      try {
+        ttsService.generate(gptReply, icount);
+        logTransfer(`TTS generation started for GPT reply`, 'info');
+      } catch (error) {
+        logTransfer(`Error generating TTS for GPT reply: ${error.message}`, 'error');
+      }
+      
       // Only set waitingForAnswer if this is a question (ends with ?)
       if (gptReply.partialResponse && gptReply.partialResponse.trim().endsWith('?')) {
         waitingForAnswer = true;
         userInputBuffer = '';
-        if (bufferTimeout) clearTimeout(bufferTimeout);
+        if (bufferTimeout) {
+          clearTimeout(bufferTimeout);
+          logTransfer(`Cleared buffer timeout for new question`, 'info');
+        }
+        logTransfer(`New question detected - waitingForAnswer set to true`, 'success');
+      } else {
+        logTransfer(`Not a question - keeping waitingForAnswer as ${waitingForAnswer}`, 'info');
       }
     });
   
