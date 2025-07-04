@@ -56,6 +56,7 @@ app.post('/incoming', (req, res) => {
     // Get callSid from Twilio webhook (from POST body or query)
     const callSid = req.body?.CallSid || req.query?.CallSid;
     console.log(`📞 Incoming webhook for callSid: ${callSid}`.cyan);
+    console.log(`Transfer flag for callSid:`, transferFlags[callSid]);
     
     if (callSid && transferFlags[callSid]) {
       // Transfer requested for this call
@@ -296,18 +297,21 @@ app.ws('/connection', (ws) => {
     // WebSocket close handling
     ws.on('close', (code, reason) => {
       logTransfer(`WebSocket closed - code: ${code}, reason: ${reason}`, 'info');
-      
       // Clean up timeouts
       if (transferTimeout) {
         clearTimeout(transferTimeout);
         transferTimeout = null;
       }
-      
       // If we have a pending transfer but haven't completed it, force it
       if (pendingTransfer && callSid && !transferMessagePlayed) {
         logTransfer(`WebSocket closed with pending transfer - forcing transfer`, 'warn');
         transferFlags[callSid] = true;
       }
+      // Remove all listeners to prevent duplicate transfer triggers
+      gptService.removeAllListeners();
+      ttsService.removeAllListeners();
+      streamService.removeAllListeners();
+      transcriptionService.removeAllListeners();
     });
     
   } catch (err) {
