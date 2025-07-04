@@ -114,7 +114,7 @@ app.ws('/connection', (ws) => {
     });
     
     gptService.on('gptreply', async (gptReply, icount) => {
-      // If the AI says to transfer, play the message, then set the flag and close the WebSocket after TTS is sent
+      if (pendingTransfer) return; // Ignore further replies after transfer is triggered
       if (gptReply && gptReply.partialResponse && gptReply.partialResponse.toLowerCase().includes('transfer you to our main line')) {
         pendingTransfer = true;
       }
@@ -129,8 +129,10 @@ app.ws('/connection', (ws) => {
       // If a transfer is pending, set the flag and close the WebSocket after TTS is sent
       if (pendingTransfer && callSid) {
         transferFlags[callSid] = true;
-        ws.close();
-        pendingTransfer = false;
+        setTimeout(() => {
+          ws.close();
+          pendingTransfer = false;
+        }, 1000); // 1 second delay to ensure message is played
       }
     });
   

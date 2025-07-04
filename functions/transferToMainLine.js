@@ -1,7 +1,7 @@
 const transferToMainLine = async (args) => {
   return {
     status: 'success',
-    message: 'You are now being transferred to our main line. Please hold for a moment.',
+    message: 'Let me transfer you to our main line. Please hold for a moment. You will hear a ring while we connect you.',
   };
 };
 
