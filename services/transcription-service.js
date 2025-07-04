@@ -22,6 +22,11 @@ class TranscriptionService extends EventEmitter {
     this.speechFinal = false; // used to determine if we have seen speech_final=true indicating that deepgram detected a natural pause in the speakers speech. 
 
     this.dgConnection.on(LiveTranscriptionEvents.Open, () => {
+      // Debug: Log every event received from Deepgram
+      this.dgConnection.onAny?.((event, data) => {
+        console.log('[DEBUG] Deepgram event:', event, JSON.stringify(data));
+      });
+
       this.dgConnection.on(LiveTranscriptionEvents.Transcript, (transcriptionEvent) => {
         const alternatives = transcriptionEvent.channel?.alternatives;
         let text = '';

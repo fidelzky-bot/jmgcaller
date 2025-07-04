@@ -86,7 +86,7 @@ const tools = [
           accidentDate: {
             type: 'string',
             description: 'The date of the accident',
-          },
+      },
           injuryDescription: {
             type: 'string',
             description: 'Description of injuries and accident details',
@@ -94,7 +94,7 @@ const tools = [
           medicalTreatment: {
             type: 'string',
             description: 'Information about hospital visits and medical treatment',
-          },
+  },
           atFaultParty: {
             type: 'string',
             description: 'Information about who was at fault',
