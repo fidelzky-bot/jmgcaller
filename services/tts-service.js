@@ -11,16 +11,11 @@ class TextToSpeechService extends EventEmitter {
   }
 
   async generate(gptReply, interactionCount) {
-    const { partialResponseIndex, partialResponse, markLabel } = gptReply;
+    const { partialResponseIndex, partialResponse } = gptReply;
 
-    if (!partialResponse) { 
-      this.emit('error', new Error('No partial response provided to TTS'));
-      return; 
-    }
+    if (!partialResponse) { return; }
 
     try {
-      console.log(`🎤 TTS generating audio for: "${partialResponse}"`.cyan);
-      
       const response = await fetch(
         `https://api.deepgram.com/v1/speak?model=${process.env.VOICE_MODEL}&encoding=mulaw&sample_rate=8000&container=none`,
         {
@@ -40,26 +35,17 @@ class TextToSpeechService extends EventEmitter {
           const blob = await response.blob();
           const audioArrayBuffer = await blob.arrayBuffer();
           const base64String = Buffer.from(audioArrayBuffer).toString('base64');
-          
-          // Validate that we actually got audio data
-          if (!base64String || base64String.length === 0) {
-            throw new Error('TTS returned empty audio data');
-          }
-          
-          console.log(`✅ TTS generated ${base64String.length} bytes of audio`.green);
-          this.emit('speech', partialResponseIndex, base64String, markLabel || partialResponse, interactionCount);
+          this.emit('speech', partialResponseIndex, base64String, partialResponse, interactionCount);
         } catch (err) {
-          console.error('❌ Error processing TTS response:', err);
-          this.emit('error', new Error(`TTS processing failed: ${err.message}`));
+          console.log(err);
         }
       } else {
-        const errorText = await response.text();
-        console.error(`❌ Deepgram TTS error (${response.status}):`, errorText);
-        this.emit('error', new Error(`TTS API error: ${response.status} - ${errorText}`));
+        console.log('Deepgram TTS error:');
+        console.log(response);
       }
     } catch (err) {
-      console.error('❌ Error occurred in TextToSpeech service:', err);
-      this.emit('error', new Error(`TTS service error: ${err.message}`));
+      console.error('Error occurred in TextToSpeech service');
+      console.error(err);
     }
   }
 }

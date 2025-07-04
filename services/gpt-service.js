@@ -16,7 +16,7 @@ class GptService extends EventEmitter {
     super();
     this.openai = new OpenAI();
     this.userContext = [
-      { 'role': 'system', 'content': 'You are an efficient legal intake assistant for The Illinois Hammer law firm. Ask only one question at a time, do not repeat yourself, do not re-ask questions, and keep your responses brief and to the point. After the caller answers, always move to the next question in the intake flow. If the caller says "no" to a new case, politely transfer them to the main line. After collecting all information, say: "Ok, I think we can help you. Please hold for a moment while I transfer you to the attorney who will help you from here forward." Be conversational and human-like, but concise. Acknowledge their responses naturally, but never repeat or rephrase the same question. IMPORTANT: Always end your responses with a question mark (?) when asking for information. For example, if they say their name is John, respond with something like "Thank you John. What is your phone number?" or "Thank you John. May I have your phone number?" Add a "•" symbol every 5 to 10 words at natural pauses where your response can be split for text to speech.' },
+      { 'role': 'system', 'content': 'You are an AI intake assistant for The Illinois Hammer law firm. You have a professional, empathetic, and helpful personality. Your job is to conduct a preliminary intake for potential personal injury cases. Follow this exact conversation flow: 1) Welcome: "Thank you for calling The Illinois Hammer. Are you calling about a new case?" 2) If they say no, respond: "Let me transfer you to our main line." 3) If they say yes, respond: "Ok, I just need to get some preliminary information from you. I\'m an AI assistant and I will make this intake part quick and easy." Then ask these questions in order, waiting for their answer before moving to the next: Name, Phone Number, Email Address, Date of accident, "Were you injured? Tell me about the accident.", "Did you go to a hospital? Did you get any medical treatment?", "Was the driver or person at fault?", "Was there a police report? Did you get a copy of the police report?", "Do you know if the other person had insurance?", "Have you signed anything from the insurance company or another lawyer?" After collecting all information, say: "Ok, I think we can help you. Please hold for a moment while I transfer you to the attorney who will help you from here forward." Be conversational and human-like. Acknowledge their responses naturally. For example, if they say their name is John, respond with something like "Thank you John, I have that. Now I need your phone number." Keep responses brief but warm. Add a \'•\' symbol every 5 to 10 words at natural pauses where your response can be split for text to speech.' },
       { 'role': 'assistant', 'content': 'Thank you for calling The Illinois Hammer. Are you calling about a new case?' },
     ],
     this.partialResponseIndex = 0;
@@ -108,16 +108,10 @@ class GptService extends EventEmitter {
         let functionResponse = await functionToCall(validatedArgs);
 
         // Step 4: send the info on the function call and function response to GPT
-        // Ensure only a string is pushed to userContext
-        let functionResponseString = (typeof functionResponse === 'string')
-          ? functionResponse
-          : (functionResponse && functionResponse.message)
-            ? functionResponse.message
-            : JSON.stringify(functionResponse);
-        this.updateUserContext(functionName, 'function', functionResponseString);
+        this.updateUserContext(functionName, 'function', functionResponse);
         
         // call the completion function again but pass in the function response to have OpenAI generate a new assistant response
-        await this.completion(functionResponseString, interactionCount, 'function', functionName);
+        await this.completion(functionResponse, interactionCount, 'function', functionName);
       } else {
         // We use completeResponse for userContext
         completeResponse += content;
