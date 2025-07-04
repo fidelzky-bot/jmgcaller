@@ -19,20 +19,10 @@ class TranscriptionService extends EventEmitter {
     });
 
     this.finalResult = '';
-    this.speechFinal = false; // used to determine if we have seen speech_final=true indicating that deepgram detected a natural pause in the speakers speech. 
-    this.silenceTimer = null;
-    this.silenceTimeoutMs = 7000; // 7 seconds
-
-    const resetSilenceTimer = () => {
-      if (this.silenceTimer) clearTimeout(this.silenceTimer);
-      this.silenceTimer = setTimeout(() => {
-        this.emit('transcription', '[AI:STILL_THERE]');
-      }, this.silenceTimeoutMs);
-    };
+    this.speechFinal = false;
 
     this.dgConnection.on(LiveTranscriptionEvents.Open, () => {
       this.dgConnection.on(LiveTranscriptionEvents.Transcript, (transcriptionEvent) => {
-        resetSilenceTimer();
         const alternatives = transcriptionEvent.channel?.alternatives;
         let text = '';
         if (alternatives) {
@@ -74,7 +64,6 @@ class TranscriptionService extends EventEmitter {
         console.error(metadata);
       });
       this.dgConnection.on(LiveTranscriptionEvents.Close, () => {
-        if (this.silenceTimer) clearTimeout(this.silenceTimer);
         console.log('STT -> Deepgram connection closed'.yellow);
       });
     });

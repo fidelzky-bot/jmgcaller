@@ -15,13 +15,13 @@ const transferToMainLine = async (args) => {
     });
     return {
       status: 'success',
-      message: `Call transferred to main line (${MAIN_LINE_NUMBER}) successfully`,
+      message: `You are now being transferred to our main line. If the call does not connect, our main line may be busy. Please try again later or leave a message.`,
     };
   } catch (error) {
     console.error('Error transferring call to main line:', error);
     return {
       status: 'error',
-      message: 'Failed to transfer call to main line',
+      message: 'Sorry, our main line is currently busy or unavailable. Please try again later or leave a message with your contact information.',
       error: error.message,
     };
   }
