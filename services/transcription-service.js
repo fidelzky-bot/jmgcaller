@@ -115,9 +115,6 @@ class TranscriptionService extends EventEmitter {
     }, this.reconnectDelay);
   }
 
-
-  }
-
   /**
    * Send the payload to Deepgram
    * @param {String} payload A base64 MULAW/8000 audio stream
