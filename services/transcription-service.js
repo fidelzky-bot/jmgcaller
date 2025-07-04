@@ -15,7 +15,7 @@ class TranscriptionService extends EventEmitter {
       punctuate: true,
       interim_results: true,
       endpointing: 200,
-      utterance_end_ms: 500 // Faster response after short pause
+      utterance_end_ms: 1000
     });
 
     this.finalResult = '';
@@ -31,11 +31,6 @@ class TranscriptionService extends EventEmitter {
     };
 
     this.dgConnection.on(LiveTranscriptionEvents.Open, () => {
-      // Debug: Log every event received from Deepgram
-      this.dgConnection.onAny?.((event, data) => {
-        console.log('[DEBUG] Deepgram event:', event, JSON.stringify(data));
-      });
-
       this.dgConnection.on(LiveTranscriptionEvents.Transcript, (transcriptionEvent) => {
         resetSilenceTimer();
         const alternatives = transcriptionEvent.channel?.alternatives;
@@ -43,8 +38,6 @@ class TranscriptionService extends EventEmitter {
         if (alternatives) {
           text = alternatives[0]?.transcript;
         }
-        
-        // if we receive an UtteranceEnd and speech_final has not already happened then we should consider this the end of of the human speech and emit the transcription
         if (transcriptionEvent.type === 'UtteranceEnd') {
           if (!this.speechFinal) {
             console.log(`UtteranceEnd received before speechFinal, emit the text collected so far: ${this.finalResult}`.yellow);
@@ -55,40 +48,31 @@ class TranscriptionService extends EventEmitter {
             return;
           }
         }
-    
-        // console.log(text, "is_final: ", transcription?.is_final, "speech_final: ", transcription.speech_final);
-        // if is_final that means that this chunk of the transcription is accurate and we need to add it to the finalResult 
         if (transcriptionEvent.is_final === true && text.trim().length > 0) {
           this.finalResult += ` ${text}`;
-          // if speech_final and is_final that means this text is accurate and it's a natural pause in the speakers speech. We need to send this to the assistant for processing
           if (transcriptionEvent.speech_final === true) {
-            this.speechFinal = true; // this will prevent a utterance end which shows up after speechFinal from sending another response
+            this.speechFinal = true;
             this.emit('transcription', this.finalResult);
             this.finalResult = '';
           } else {
-            // if we receive a message without speechFinal reset speechFinal to false, this will allow any subsequent utteranceEnd messages to properly indicate the end of a message
             this.speechFinal = false;
           }
         } else {
           this.emit('utterance', text);
         }
       });
-
       this.dgConnection.on(LiveTranscriptionEvents.Error, (error) => {
         console.error('STT -> deepgram error');
         console.error(error);
       });
-
       this.dgConnection.on(LiveTranscriptionEvents.Warning, (warning) => {
         console.error('STT -> deepgram warning');
         console.error(warning);
       });
-
       this.dgConnection.on(LiveTranscriptionEvents.Metadata, (metadata) => {
         console.error('STT -> deepgram metadata');
         console.error(metadata);
       });
-
       this.dgConnection.on(LiveTranscriptionEvents.Close, () => {
         if (this.silenceTimer) clearTimeout(this.silenceTimer);
         console.log('STT -> Deepgram connection closed'.yellow);
