@@ -192,8 +192,9 @@ app.ws('/connection', (ws) => {
     });
   
     transcriptionService.on('utterance', async (text) => {
+      logTransfer(`STT Utterance: "${text}"`, 'info');
       // This is a bit of a hack to filter out empty utterances
-      if(marks.length > 0 && text?.length > 5) {
+      if(marks.length > 0 && text?.length > 1) {
         logTransfer(`Interruption detected - clearing stream`, 'warn');
         ws.send(
           JSON.stringify({
@@ -205,6 +206,7 @@ app.ws('/connection', (ws) => {
     });
   
     transcriptionService.on('transcription', async (text) => {
+      logTransfer(`STT Transcription: "${text}"`, 'info');
       if (!text) { return; }
       logTransfer(`STT -> GPT: ${text}`, 'info');
       gptService.completion(text, interactionCount);
