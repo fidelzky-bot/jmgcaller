@@ -194,6 +194,12 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('utterance', async (text) => {
       logTransfer(`STT Utterance: "${text}"`, 'info');
+      if (text && text.length > 1) {
+        // Fallback: If no transcription event, treat utterance as transcription
+        logTransfer(`STT (fallback) -> GPT: ${text}`, 'info');
+        gptService.completion(text, interactionCount);
+        interactionCount += 1;
+      }
       // This is a bit of a hack to filter out empty utterances
       if(marks.length > 0 && text?.length > 1) {
         logTransfer(`Interruption detected - clearing stream`, 'warn');
