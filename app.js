@@ -113,6 +113,23 @@ app.ws('/connection', (ws) => {
     let interactionCount = 0;
     let lastUserInput = '';
     
+    // Helper for smarter deduplication
+    function isSimilarInput(newInput, lastInput) {
+      if (!newInput || !lastInput) return false;
+      const a = newInput.trim().toLowerCase();
+      const b = lastInput.trim().toLowerCase();
+      if (a === b) return true;
+      if (a.length < 4 || b.length < 4) return false;
+      // Substring check
+      if (a.includes(b) || b.includes(a)) return true;
+      // Levenshtein distance (simple version)
+      let mismatches = 0;
+      for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        if (a[i] !== b[i]) mismatches++;
+      }
+      return mismatches <= 2;
+    }
+  
     // Enhanced logging function
     const logTransfer = (message, level = 'info') => {
       const timestamp = new Date().toISOString();
@@ -195,7 +212,7 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('utterance', async (text) => {
       logTransfer(`STT Utterance: "${text}"`, 'info');
-      if (text && text.length > 1 && text !== lastUserInput) {
+      if (text && text.length > 1 && !isSimilarInput(text, lastUserInput)) {
         logTransfer(`STT (fallback) -> GPT: ${text}`, 'info');
         gptService.completion(text, interactionCount);
         interactionCount += 1;
@@ -214,7 +231,7 @@ app.ws('/connection', (ws) => {
   
     transcriptionService.on('transcription', async (text) => {
       logTransfer(`STT Transcription: "${text}"`, 'info');
-      if (text && text.length > 1 && text !== lastUserInput) {
+      if (text && text.length > 1 && !isSimilarInput(text, lastUserInput)) {
         logTransfer(`STT -> GPT: ${text}`, 'info');
         gptService.completion(text, interactionCount);
         interactionCount += 1;
